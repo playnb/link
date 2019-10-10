@@ -1,7 +1,19 @@
 package main
 
-import "github.com/playnb/link"
+import (
+	"github.com/playnb/util/log"
+	"time"
+)
+
+func init() {
+	log.InitPanic("../tmp")
+	log.Init(log.DefaultLogger("../tmp", "run"))
+	defer log.Flush()
+}
 
 func main() {
-	link.NewMsgParser()
+	ws()
+	for {
+		time.Sleep(time.Second)
+	}
 }

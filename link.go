@@ -14,6 +14,10 @@ func (agent *Agent) init(conn Conn, pendingNum int) {
 	agent.conn = conn
 }
 
+func (agent *Agent) GetUniqueID() uint64 {
+	return agent.conn.GetUniqueID()
+}
+
 func (agent *Agent) ReadChan() chan util.BuffData {
 	return agent.msgChan
 }

@@ -2,13 +2,27 @@ package link
 
 import (
 	"crypto/tls"
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/playnb/util/log"
+	"github.com/unrolled/secure"
 	"net"
 	"net/http"
 	"sync"
 	"time"
 )
+
+var gins map[string]*gin.Engine = make(map[string]*gin.Engine)
+
+func getGinEngine(addr string) (*gin.Engine, bool) {
+	if e, ok := gins[addr]; ok {
+		return e, false
+	} else {
+		e = gin.New()
+		gins[addr] = e
+		return e, true
+	}
+}
 
 type ServerOption struct {
 	Addr            string
@@ -16,9 +30,11 @@ type ServerOption struct {
 	MaxConnNum      int
 	PendingWriteNum int
 
-	HTTPTimeout time.Duration
-	CertFile    string
-	KeyFile     string
+	RelativePath string
+	HTTPTimeout  time.Duration
+	CertFile     string
+	KeyFile      string
+	GinLogger    gin.HandlerFunc
 }
 
 func (opt *ServerOption) Check() {
@@ -34,6 +50,12 @@ func (opt *ServerOption) Check() {
 	if opt.HTTPTimeout <= 0 {
 		opt.HTTPTimeout = 10 * time.Second
 	}
+	if len(opt.RelativePath) == 0 {
+		opt.RelativePath = "/"
+	}
+	if opt.GinLogger == nil {
+		opt.GinLogger = gin.Logger()
+	}
 }
 
 type WSServer struct {
@@ -42,7 +64,9 @@ type WSServer struct {
 	upgrader    websocket.Upgrader
 	option      *ServerOption
 	clientConns map[uint64]Conn
-	ln          net.Listener
+
+	ln     net.Listener
+	engine *gin.Engine
 
 	wg sync.WaitGroup
 
@@ -114,45 +138,95 @@ func (serv *WSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (serv *WSServer) Start(option *ServerOption) error {
 	serv.option = option
 	serv.option.Check()
-	ln, err := net.Listen("tcp", serv.option.Addr)
-	if err != nil {
-		return err
-	}
-
-	if serv.option.CertFile != "" || serv.option.KeyFile != "" {
-		config := &tls.Config{}
-		config.NextProtos = []string{"http/1.1"}
-
-		var err error
-		config.Certificates = make([]tls.Certificate, 1)
-		config.Certificates[0], err = tls.LoadX509KeyPair(serv.option.CertFile, serv.option.KeyFile)
-		if err != nil {
-			return err
-		}
-
-		ln = tls.NewListener(ln, config)
-	}
-
-	serv.ln = ln
 	serv.clientConns = make(map[uint64]Conn)
 	serv.upgrader = websocket.Upgrader{
 		HandshakeTimeout: serv.option.HTTPTimeout,
 		CheckOrigin:      func(_ *http.Request) bool { return true },
 	}
-
-	httpServer := &http.Server{
-		Addr:           serv.option.Addr,
-		Handler:        serv,
-		ReadTimeout:    serv.option.HTTPTimeout,
-		WriteTimeout:   serv.option.HTTPTimeout,
-		MaxHeaderBytes: 1024,
-	}
-	go func() {
-		err := httpServer.Serve(ln)
+	if false {
+		ln, err := net.Listen("tcp", serv.option.Addr)
 		if err != nil {
-			log.Fatal(err.Error())
+			return err
 		}
-	}()
+
+		if serv.option.CertFile != "" || serv.option.KeyFile != "" {
+			config := &tls.Config{}
+			config.NextProtos = []string{"http/1.1"}
+
+			var err error
+			config.Certificates = make([]tls.Certificate, 1)
+			config.Certificates[0], err = tls.LoadX509KeyPair(serv.option.CertFile, serv.option.KeyFile)
+			if err != nil {
+				return err
+			}
+
+			ln = tls.NewListener(ln, config)
+		}
+
+		serv.ln = ln
+
+		httpServer := &http.Server{
+			Addr:           serv.option.Addr,
+			Handler:        serv,
+			ReadTimeout:    serv.option.HTTPTimeout,
+			WriteTimeout:   serv.option.HTTPTimeout,
+			MaxHeaderBytes: 1024,
+		}
+		go func() {
+			err := httpServer.Serve(ln)
+			if err != nil {
+				log.Fatal(err.Error())
+			}
+		}()
+	} else {
+		gin.SetMode(gin.DebugMode)
+		e, newGin := getGinEngine(serv.option.Addr) //gin.New()
+		serv.engine = e
+		if newGin {
+			if serv.option.GinLogger != nil {
+				serv.engine.Use(serv.option.GinLogger)
+			}
+		}
+
+		serv.engine.Handle(http.MethodGet, serv.option.RelativePath, func(c *gin.Context) {
+			serv.ServeHTTP(c.Writer, c.Request)
+		})
+		if newGin {
+			if serv.option.CertFile != "" || serv.option.KeyFile != "" {
+				secureMiddleware := secure.New(secure.Options{
+					FrameDeny: true,
+				})
+				secureFunc := func() gin.HandlerFunc {
+					return func(c *gin.Context) {
+						err := secureMiddleware.Process(c.Writer, c.Request)
+						// If there was an error, do not continue.
+						if err != nil {
+							c.Abort()
+							return
+						}
+						// Avoid header rewrite if response is a redirection.
+						if status := c.Writer.Status(); status > 300 && status < 399 {
+							c.Abort()
+						}
+					}
+				}()
+				serv.engine.Use(secureFunc)
+				go func() {
+					err := serv.engine.RunTLS(serv.option.Addr, serv.option.CertFile, serv.option.KeyFile)
+					if err != nil {
+						log.Error(err.Error())
+					}
+				}()
+			} else {
+				go func() {
+					err := serv.engine.Run(serv.option.Addr)
+					if err != nil {
+						log.Error(err.Error())
+					}
+				}()
+			}
+		}
+	}
 	return nil
 }
 
