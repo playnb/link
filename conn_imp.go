@@ -30,14 +30,16 @@ func newImpConn(conn net.Conn, pendingWriteNum int) *ImpConn {
 	iConn.closeFlag = false
 	iConn.uniqueID = atomic.AddUint64(&_UniqueID, 1)
 
-	//链接发送线程
+	//发送线程
 	go func() {
 		for b := range iConn.writeChan {
 			if b == nil {
 				//发送nil标识断开连接
 				break
 			}
-			_, err := conn.Write(b.GetPayload())
+			buf := b.GetPayload()
+			//log.Debug("%d 发送数据 %s", iConn.GetUniqueID(), buf)
+			_, err := conn.Write(buf)
 			b.Release()
 			if err != nil {
 				log.Error(err.Error())
@@ -45,6 +47,7 @@ func newImpConn(conn net.Conn, pendingWriteNum int) *ImpConn {
 			}
 		}
 
+		log.Trace("%d 结束发送线程", iConn.GetUniqueID())
 		conn.Close()
 		iConn.Lock()
 		iConn.closeFlag = true
