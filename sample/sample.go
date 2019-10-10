@@ -6,12 +6,13 @@ import (
 )
 
 func init() {
-	log.InitPanic("../tmp")
-	log.Init(log.DefaultLogger("../tmp", "run"))
-	defer log.Flush()
 }
 
 func main() {
+	log.InitPanic("../tmp")
+	log.Init(log.DefaultLogger("../tmp", "run"))
+	defer log.Flush()
+
 	ws()
 	for {
 		time.Sleep(time.Second)
