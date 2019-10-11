@@ -2,6 +2,8 @@ package link
 
 import (
 	"github.com/gorilla/websocket"
+	"github.com/playnb/link/codec"
+	"github.com/playnb/link/connect"
 	"github.com/playnb/util/log"
 	"sync"
 	"time"
@@ -13,6 +15,7 @@ type ClientOption struct {
 	MaxConnNum       int
 	PendingWriteNum  int
 	HandshakeTimeout time.Duration
+	Codec            codec.Codec
 }
 
 func (opt *ClientOption) Check() {
@@ -28,6 +31,9 @@ func (opt *ClientOption) Check() {
 	if opt.HandshakeTimeout <= 0 {
 		opt.HandshakeTimeout = 10 * time.Second
 	}
+	if opt.Codec == nil {
+		opt.Codec = &codec.Empty{}
+	}
 }
 
 type WSClient struct {
@@ -35,7 +41,7 @@ type WSClient struct {
 
 	option *ClientOption
 	dialer websocket.Dialer
-	conn   Conn
+	conn   connect.Conn
 }
 
 func (client *WSClient) dial() error {
@@ -46,7 +52,7 @@ func (client *WSClient) dial() error {
 	if err != nil {
 		return err
 	}
-	client.conn = newWSConn(conn, client.option.PendingWriteNum, client.option.MaxMsgLen)
+	client.conn = connect.NewWSConn(conn, client.option.PendingWriteNum, client.option.MaxMsgLen)
 	return nil
 }
 
@@ -59,7 +65,7 @@ func (client *WSClient) Start(option *ClientOption) *Agent {
 	}
 	agent := &Agent{}
 	agent.init(client.conn, client.option.MaxMsgLen)
-
+	agent.cc = client.option.Codec.Clone()
 	go func() {
 		for {
 			data, err := client.conn.ReadMsg()
@@ -70,9 +76,9 @@ func (client *WSClient) Start(option *ClientOption) *Agent {
 				log.Error("Agent msgChan full")
 				continue
 			}
-			agent.msgChan <- data
+			agent.putChan(data)
 		}
-		close(agent.msgChan)
+		agent.closeChan()
 		agent.OnClose()
 	}()
 

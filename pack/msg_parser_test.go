@@ -1,4 +1,4 @@
-package link
+package pack
 
 import (
 	"bytes"
@@ -14,13 +14,13 @@ func TestMsgParser(t *testing.T) {
 		buf := bytes.NewBuffer(nil)
 
 		payLoad := "123123123AA"
-		src, err := mp.WriteAll([]byte(payLoad))
+		src, err := WriteAll([]byte(payLoad))
 		convey.So(err, convey.ShouldBeNil)
 
 		_, err = buf.Write(src.GetPayload())
 		convey.So(err, convey.ShouldBeNil)
 
-		dst, err := mp.Read(buf)
+		dst, err := Read(buf)
 		convey.So(err, convey.ShouldBeNil)
 
 		convey.So([]byte(payLoad), util.ShouldByteSilceEqual, dst.GetPayload())

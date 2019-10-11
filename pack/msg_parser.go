@@ -1,4 +1,4 @@
-package link
+package pack
 
 import (
 	"encoding/binary"
@@ -12,34 +12,34 @@ import (
 // | lenMsgLen | data |
 // --------------------
 
-type MsgParser interface {
+type PackParser interface {
 	Init(littleEndian bool, lenMsgLen int, minMsgLen int, maxMsgLen int)
 	Read(conn io.Reader) (util.BuffData, error)
 	WriteAll(args ...[]byte) (util.BuffData, error)
 	Write(args util.BuffData) (util.BuffData, error)
 }
 
-type msgParser struct {
+type packParser struct {
 	lenMsgLen    int //表示长度的字节位数
 	minMsgLen    int
 	maxMsgLen    int
 	littleEndian bool //大小端字节序
 }
 
-func NewMsgParser() MsgParser {
-	p := &msgParser{}
+func NewMsgParser() PackParser {
+	p := &packParser{}
 	p.Init(false, 2, 1, 4096)
 	return p
 }
 
-func (mp *msgParser) Init(littleEndian bool, lenMsgLen int, minMsgLen int, maxMsgLen int) {
+func (mp *packParser) Init(littleEndian bool, lenMsgLen int, minMsgLen int, maxMsgLen int) {
 	mp.littleEndian = littleEndian
 	mp.lenMsgLen = lenMsgLen
 	mp.minMsgLen = minMsgLen
 	mp.maxMsgLen = maxMsgLen
 }
 
-func (mp *msgParser) Read(conn io.Reader) (util.BuffData, error) {
+func (mp *packParser) Read(conn io.Reader) (util.BuffData, error) {
 	var b [4]byte
 	bufMsgLen := b[:mp.lenMsgLen]
 
@@ -80,7 +80,7 @@ func (mp *msgParser) Read(conn io.Reader) (util.BuffData, error) {
 	return msgData, nil
 }
 
-func (mp *msgParser) WriteAll(args ...[]byte) (util.BuffData, error) {
+func (mp *packParser) WriteAll(args ...[]byte) (util.BuffData, error) {
 	var msgLen int
 	for i := 0; i < len(args); i++ {
 		msgLen += len(args[i])
@@ -120,7 +120,7 @@ func (mp *msgParser) WriteAll(args ...[]byte) (util.BuffData, error) {
 
 	return msgData, nil
 }
-func (mp *msgParser) Write(args util.BuffData) (util.BuffData, error) {
+func (mp *packParser) Write(args util.BuffData) (util.BuffData, error) {
 	//利用util.BuffData减少复制和GC
 	return mp.WriteAll(args.GetPayload())
 }

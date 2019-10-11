@@ -1,4 +1,4 @@
-package link
+package connect
 
 import (
 	"errors"
@@ -6,7 +6,6 @@ import (
 	"github.com/playnb/util/log"
 	"net"
 	"sync"
-	"sync/atomic"
 )
 
 type ImpConn struct {
@@ -28,7 +27,7 @@ func newImpConn(conn net.Conn, pendingWriteNum int) *ImpConn {
 	iConn.closeChan = make(chan bool)
 	iConn.writeChan = make(chan util.BuffData, pendingWriteNum)
 	iConn.closeFlag = false
-	iConn.uniqueID = atomic.AddUint64(&_UniqueID, 1)
+	iConn.uniqueID = GetConnUniqueID()
 
 	//发送线程
 	go func() {
@@ -38,7 +37,7 @@ func newImpConn(conn net.Conn, pendingWriteNum int) *ImpConn {
 				break
 			}
 			buf := b.GetPayload()
-			//log.Debug("%d 发送数据 %s", iConn.GetUniqueID(), buf)
+			//log.Debug("%d 发送数据 %s", iConn.GetConnUniqueID(), buf)
 			_, err := conn.Write(buf)
 			b.Release()
 			if err != nil {

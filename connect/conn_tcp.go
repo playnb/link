@@ -1,18 +1,19 @@
-package link
+package connect
 
 import (
+	"github.com/playnb/link/pack"
 	"github.com/playnb/util"
 	"net"
 )
 
 type TCPConn struct {
 	*ImpConn
-	msgParser MsgParser
+	msgParser pack.PackParser
 }
 
 //PendingWriteNum: 发送缓冲区大小
 //msgParser: 黏包的解析器
-func newTCPConn(conn *net.TCPConn, pendingWriteNum int, msgParser MsgParser) Conn {
+func NewTCPConn(conn *net.TCPConn, pendingWriteNum int, msgParser pack.PackParser) Conn {
 	tcpConn := &TCPConn{}
 	tcpConn.msgParser = msgParser
 	tcpConn.ImpConn = newImpConn(conn, pendingWriteNum)

@@ -1,17 +1,33 @@
 package link
 
-import "github.com/playnb/util"
+import (
+	"github.com/playnb/link/codec"
+	"github.com/playnb/link/connect"
+	"github.com/playnb/util"
+)
 
 type Agent struct {
 	OnClose func()
 
 	msgChan chan util.BuffData
-	conn    Conn
+	conn    connect.Conn
+	cc      codec.Codec
 }
 
-func (agent *Agent) init(conn Conn, pendingNum int) {
+func (agent *Agent) init(conn connect.Conn, pendingNum int) {
 	agent.msgChan = make(chan util.BuffData, pendingNum)
 	agent.conn = conn
+}
+
+func (agent *Agent) putChan(data util.BuffData) {
+	if agent.cc != nil {
+		agent.msgChan <- agent.cc.Decode(data)
+	} else {
+		agent.msgChan <- data
+	}
+}
+func (agent *Agent) closeChan() {
+	close(agent.msgChan)
 }
 
 func (agent *Agent) GetUniqueID() uint64 {
@@ -23,7 +39,11 @@ func (agent *Agent) ReadChan() chan util.BuffData {
 }
 
 func (agent *Agent) WriteMsg(data util.BuffData) error {
-	return agent.conn.WriteMsg(data)
+	if agent.cc != nil {
+		return agent.conn.WriteMsg(agent.cc.Encode(data))
+	} else {
+		return agent.conn.WriteMsg(data)
+	}
 }
 
 func (agent *Agent) Close() {

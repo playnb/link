@@ -4,6 +4,8 @@ import (
 	"crypto/tls"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/playnb/link/codec"
+	"github.com/playnb/link/connect"
 	"github.com/playnb/util/log"
 	"github.com/unrolled/secure"
 	"net"
@@ -29,12 +31,18 @@ type ServerOption struct {
 	MaxMsgLen       int
 	MaxConnNum      int
 	PendingWriteNum int
+	Codec           codec.Codec
 
 	RelativePath string
 	HTTPTimeout  time.Duration
 	CertFile     string
 	KeyFile      string
 	GinLogger    gin.HandlerFunc
+}
+
+type AgentOption struct {
+	Conn       connect.Conn
+	PendingNum int
 }
 
 func (opt *ServerOption) Check() {
@@ -56,6 +64,9 @@ func (opt *ServerOption) Check() {
 	if opt.GinLogger == nil {
 		opt.GinLogger = gin.Logger()
 	}
+	if opt.Codec == nil {
+		opt.Codec = &codec.Empty{}
+	}
 }
 
 type WSServer struct {
@@ -63,7 +74,7 @@ type WSServer struct {
 
 	upgrader    websocket.Upgrader
 	option      *ServerOption
-	clientConns map[uint64]Conn
+	clientConns map[uint64]connect.Conn
 
 	ln     net.Listener
 	engine *gin.Engine
@@ -88,7 +99,7 @@ func (serv *WSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	serv.wg.Add(1)
 	defer serv.wg.Done()
 
-	wsc := func() Conn {
+	wsc := func() connect.Conn {
 		serv.Lock()
 		defer serv.Unlock()
 		if serv.clientConns == nil {
@@ -101,7 +112,7 @@ func (serv *WSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 
-		wsc := newWSConn(conn, serv.option.PendingWriteNum, serv.option.MaxMsgLen)
+		wsc := connect.NewWSConn(conn, serv.option.PendingWriteNum, serv.option.MaxMsgLen)
 		serv.clientConns[wsc.GetUniqueID()] = wsc
 		return wsc
 	}()
@@ -111,6 +122,7 @@ func (serv *WSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	agent := &Agent{}
 	agent.init(wsc, serv.option.MaxMsgLen)
+	agent.cc = serv.option.Codec.Clone()
 	if serv.OnAccept != nil {
 		serv.OnAccept(agent)
 	}
@@ -123,9 +135,9 @@ func (serv *WSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.Error("Agent msgChan full")
 			continue
 		}
-		agent.msgChan <- data
+		agent.putChan(data)
 	}
-	close(agent.msgChan)
+	agent.closeChan()
 	if agent.OnClose != nil {
 		agent.OnClose()
 	}
@@ -138,7 +150,7 @@ func (serv *WSServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (serv *WSServer) Start(option *ServerOption) error {
 	serv.option = option
 	serv.option.Check()
-	serv.clientConns = make(map[uint64]Conn)
+	serv.clientConns = make(map[uint64]connect.Conn)
 	serv.upgrader = websocket.Upgrader{
 		HandshakeTimeout: serv.option.HTTPTimeout,
 		CheckOrigin:      func(_ *http.Request) bool { return true },

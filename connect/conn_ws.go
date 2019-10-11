@@ -1,4 +1,4 @@
-package link
+package connect
 
 import (
 	"errors"
@@ -36,7 +36,7 @@ type WSConn struct {
 	maxMsgLen int
 }
 
-func newWSConn(conn *websocket.Conn, pendingWriteNum int, maxMsgLen int) Conn {
+func NewWSConn(conn *websocket.Conn, pendingWriteNum int, maxMsgLen int) Conn {
 	wsConn := &WSConn{}
 	wsConn.maxMsgLen = maxMsgLen
 	wsConn.ImpConn = newImpConn(&wsconn{Conn: conn}, pendingWriteNum)
