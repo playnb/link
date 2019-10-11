@@ -49,6 +49,7 @@ var serverOptPing = &link.ServerOption{
 
 func ping(agent *link.Agent) {
 	log.Trace("ping创建连接: %d", agent.GetUniqueID())
+	agent.SetUserData(nil)
 	agent.OnClose = func() {
 		log.Trace("ping断开连接: %d", agent.GetUniqueID())
 	}

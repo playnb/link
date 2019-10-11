@@ -7,6 +7,7 @@ import (
 )
 
 type Agent struct {
+	UserData
 	OnClose func()
 
 	msgChan chan util.BuffData
