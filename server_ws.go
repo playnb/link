@@ -179,7 +179,7 @@ func (serv *WSServer) Start(option *ServerOption) error {
 			}
 		}()
 	} else {
-		gin.SetMode(gin.DebugMode)
+		//gin.SetMode(gin.DebugMode)
 		e, newGin := getGinEngine(serv.option.Addr) //gin.New()
 		serv.engine = e
 		if newGin {
