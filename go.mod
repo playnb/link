@@ -5,7 +5,7 @@ module github.com/playnb/link
 go 1.12
 
 require (
-	github.com/gin-gonic/gin v1.4.0
+	github.com/gin-gonic/gin v1.7.7
 	github.com/gorilla/websocket v1.4.1
 	github.com/playnb/util v0.0.0-20191010102029-14750951e299
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337
